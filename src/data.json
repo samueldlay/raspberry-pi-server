@@ -1,0 +1,27 @@
+[
+  {
+    "name": "John",
+    "email": "john@gmail.com",
+    "userID": "ec97f1d1-7678-4e15-92e1-d67f8456720c"
+  },
+  {
+    "name": "Becky",
+    "email": "Becky@gmail.com",
+    "userID": "db93d6dc-ab55-4683-87bd-260c29c997b7"
+  },
+  {
+    "name": "Sam",
+    "email": "sam@gmail.com",
+    "userID": "123456789"
+  },
+  {
+    "name": "DEAN GOOBLER",
+    "email": "GOOBLERGOBBLER@gmail.com",
+    "userID": "1490817234098uqwer"
+  },
+  {
+    "name": "GAIL RYZNAR",
+    "email": "GAILTHEMOM@gmail.com",
+    "userID": "kk8sd9uerfj98sdfk"
+  }
+]
