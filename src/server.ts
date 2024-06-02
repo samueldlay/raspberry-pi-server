@@ -34,19 +34,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-fs.readFile(JSONpath, "utf8", (err, data) => {
-  if (err) {
-    console.error("Error reading file:", err);
-    return;
-  }
-  try {
-    const jsonData = JSON.parse(data);
-    console.log(jsonData);
-  } catch (err) {
-    console.error("Error parsing JSON string:", err);
-  }
-});
-
 const options = {
   key: fs.readFileSync(path.resolve(__dirname, "example.com.key")),
   cert: fs.readFileSync(path.resolve(__dirname, "example.com.crt")),
@@ -61,10 +48,11 @@ app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).send({ message: "No file uploaded." });
   }
-  console.log("FILE_NAME", req.file.filename);
+  console.log("FILE_NAME: ", req.file.filename);
   res.send({ message: "File uploaded successfully", file: req.file });
 });
 
+// UPdate this logic and update frontend logic for user account creation
 app.post("/createAccount", (req, res) => {
   const newUser: {
     email: string;
