@@ -17,7 +17,7 @@ app.use(express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "../uploads"),
+  destination: (req, file, cb) => cb(null, "../../sams-ssd/uploads"),
   filename: (req, file, cb) => {
     const date = new Date();
     const day = date.getDate();
@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
     if (file.originalname) {
       cb(null, `${currentDate}-${file.originalname}`);
     }
-    cb(null, "NOT_A_FILENAME");
+    else cb(null, "NOT_A_FILENAME");
   },
 });
 
