@@ -13,11 +13,11 @@ const port = 8080;
 
 app.use(bodyParser.json());
 app.use(cors());
-app.use(express.static("./src/dist"));
+app.use(express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "./src/uploads"),
+  destination: (req, file, cb) => cb(null, "../uploads"),
   filename: (req, file, cb) => {
     const date = new Date();
     const day = date.getDate();
@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 fs.readFile(JSONpath, "utf8", (err, data) => {
   if (err) {
@@ -52,7 +52,7 @@ const options = {
   cert: fs.readFileSync(path.resolve(__dirname, "example.com.crt")),
 };
 
-app.get("*", (req, res) => {
+app.get("/", (req, res) => {
   console.log(req);
   res.send(path.resolve("./src/dist", "index.html"));
 });
@@ -67,7 +67,6 @@ app.post("/upload", upload.single("file"), (req, res) => {
 
 app.post("/createAccount", (req, res) => {
   const newUser: {
-    name: string;
     email: string;
     password: string;
     userID: string;
@@ -82,7 +81,6 @@ app.post("/createAccount", (req, res) => {
       if (
         users.find(
           (user: {
-            name: string;
             email: string;
             password: string;
             userID: string;
@@ -94,7 +92,7 @@ app.post("/createAccount", (req, res) => {
         );
         return;
       }
-      // Add the new user object to the array
+
       users.push(newUser);
 
       fs.writeFile(JSONpath, JSON.stringify(users, null, 2), (err) => {
@@ -122,11 +120,6 @@ app.post("/createAccount", (req, res) => {
 });
 
 // app.post('/login', (req, res) => {
-// });
-
-// app.post('/upload', (req, res) => {
-//   // Handle file uploads
-//   console.log("AT UPLOAD URL");
 // });
 
 https.createServer(options, app).listen(port, () => {
