@@ -17,7 +17,7 @@ app.use(express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "../../sams-ssd/uploads"),
+  destination: (req, file, cb) => cb(null, "../../sams-ssd/uploads"), /* update this to not be hard-coded */
   filename: (req, file, cb) => {
     const date = new Date();
     const day = date.getDate();
