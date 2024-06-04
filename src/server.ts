@@ -1,5 +1,6 @@
 import express from "express";
-import fs, {access, constants} from "fs";
+import fs, { access, constants } from "fs";
+import os from "os";
 import bodyParser from "body-parser";
 import path from "path";
 import cors from "cors";
@@ -7,10 +8,75 @@ import helmet from "helmet";
 import https from "https";
 import multer from "multer";
 const JSONpath = "./src/data.json";
+import bcrypt from "bcrypt";
 
 const app = express();
 const port = 8080;
 
+const saltRounds = 10;
+const myPlaintextPassword = "password1";
+
+type User = { email: string, password: string, userID: string };
+
+function storeUser(path: string, password: string, res: Response, newUser: User, users: User[]) {
+  bcrypt.hash(password, saltRounds, (err, hash) => {
+    // Store hash in your password DB.
+    try {
+      if (err) throw err;
+
+      const newUserWithUUID = { ...newUser, password: hash, userID: crypto.randomUUID() };
+      users.push(newUserWithUUID);
+
+      fs.writeFile(path, JSON.stringify(users, null, 2), (err) => {
+        if (err) {
+          console.error("Error writing file:", err);
+        } else {
+          console.log("New user added successfully!", users);
+          //@ts-ignore
+          res.send(
+            JSON.stringify({
+              message: "You have been successfully added!",
+              username: newUser.email,
+            }),
+          );
+        }
+      });
+    }
+    catch (err) {
+      if (err instanceof Error) console.error(err);
+      else console.error(err);
+    }
+  });
+}
+
+function compareHashes(password: string, hashedPassword: string) {
+  bcrypt.compare(password, hashedPassword, (err, result) => {
+    try {
+      if (err) throw err;
+      console.log({ result });
+    } catch (err) {
+      if (err instanceof Error) console.error(err.message);
+      else console.error(JSON.stringify(err));
+    }
+  });
+}
+
+function readPassword(path: string, password: string) {
+  fs.readFile(path, "utf8", (err, data) => {
+    try {
+      if (err) throw err;
+      console.log(data);
+      const parsed = JSON.parse(data);
+      const hashedPassword = parsed.password;
+      compareHashes(password, hashedPassword);
+    } catch (err) {
+      if (err instanceof Error) console.error(err.message);
+      else console.error(JSON.stringify(err));
+    }
+  });
+}
+
+// console.log("OS:", os.networkInterfaces());
 app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static("../raspberry-pi-frontend/dist"));
@@ -18,32 +84,35 @@ app.use(helmet());
 const testSubDirectory = "3-6-2024-connect-four2.png";
 const testDirectory = `../../sams-ssd/uploads/${testSubDirectory}`;
 
-function directoryExists (path: string) {
-  access(path, constants.F_OK, (err) => {
-    try {
-      if (err) throw err;
-      console.log("DIRECTORY EXISTS");
-    } catch (err) {
-      console.log(err);
-      fs.mkdir(path, {recursive: true}, (err) => {
-        if (err) console.log("MKDIR ERR:", err);
-      });
-    }
-  })
-}
+// function directoryExists(path: string) {
+//   access(path, constants.F_OK, (err) => {
+//     try {
+//       if (err) throw err;
+//       console.log("DIRECTORY EXISTS");
+//     } catch (err) {
+//       console.log(err);
+//       fs.mkdir(path, { recursive: true }, (err) => {
+//         if (err) console.log("MKDIR ERR:", err);
+//       });
+//     }
+//   })
+// }
 
-function readDirectory  (path: string) {
-  const files = fs.readdir(path, { withFileTypes: true, recursive: true}, (err, data) => {
-    if (err) console.log(err);
-    if (data) console.log(Object.values(data[0])[3]);
-  })
-}
+// function readDirectory(path: string) {
+//   const files = fs.readdir(path, { withFileTypes: true, recursive: true }, (err, data) => {
+//     if (err) console.log(err);
+//     return data;
+//   });
 
-directoryExists("../../sams-ssd/uploads/samueldlay@gmail.com");
-readDirectory("../../sams-ssd/uploads");
+//   return files;
+// }
+
+// directoryExists("../../sams-ssd/uploads/samueldlay@gmail.com");
+// readDirectory("../../sams-ssd/uploads");
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "../../sams-ssd/uploads"), /* update this to not be hard-coded */
+  destination: (req, file, cb) =>
+    cb(null, "../../sams-ssd/uploads") /* update this to not be hard-coded */,
   filename: (req, file, cb) => {
     const date = new Date();
     const day = date.getDate();
@@ -53,8 +122,7 @@ const storage = multer.diskStorage({
 
     if (file.originalname) {
       cb(null, `${currentDate}-${file.originalname}`);
-    }
-    else cb(null, "NOT_A_FILENAME");
+    } else cb(null, "NOT_A_FILENAME");
   },
 });
 
@@ -65,10 +133,10 @@ const options = {
   cert: fs.readFileSync(path.resolve(__dirname, "example.com.crt")),
 };
 
-app.get("/", (req, res) => {
-  console.log(req);
-  res.send(path.resolve("./src/dist", "index.html"));
-});
+// app.get("/", (req, res) => {
+//   console.log(req);
+//   res.send(path.resolve("./src/dist", "index.html"));
+// });
 
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
@@ -83,7 +151,6 @@ app.post("/createAccount", (req, res) => {
   const newUser: {
     email: string;
     password: string;
-    userID: string;
   } = req.body;
   fs.readFile(JSONpath, "utf8", (err, data) => {
     if (err) {
@@ -107,21 +174,9 @@ app.post("/createAccount", (req, res) => {
         return;
       }
 
-      users.push(newUser);
+      // @ts-ignore
+      storeUser(JSONpath, newUser.password, res, newUser, users);
 
-      fs.writeFile(JSONpath, JSON.stringify(users, null, 2), (err) => {
-        if (err) {
-          console.error("Error writing file:", err);
-        } else {
-          console.log("New user added successfully!", users);
-          res.send(
-            JSON.stringify({
-              message: "You have been successfully added!",
-              username: newUser.email,
-            }),
-          );
-        }
-      });
     } catch (err) {
       if (err instanceof Error) {
         return err.message;
