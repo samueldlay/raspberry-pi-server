@@ -1,5 +1,5 @@
 import express from "express";
-import fs from "fs";
+import fs, {access, constants} from "fs";
 import bodyParser from "body-parser";
 import path from "path";
 import cors from "cors";
@@ -15,6 +15,32 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
+const testSubDirectory = "3-6-2024-connect-four2.png";
+const testDirectory = `../../sams-ssd/uploads/${testSubDirectory}`;
+
+function directoryExists (path: string) {
+  access(path, constants.F_OK, (err) => {
+    try {
+      if (err) throw err;
+      console.log("DIRECTORY EXISTS");
+    } catch (err) {
+      console.log(err);
+      fs.mkdir(path, {recursive: true}, (err) => {
+        if (err) console.log("MKDIR ERR:", err);
+      });
+    }
+  })
+}
+
+function readDirectory  (path: string) {
+  const files = fs.readdir(path, { withFileTypes: true, recursive: true}, (err, data) => {
+    if (err) console.log(err);
+    if (data) console.log(Object.values(data[0])[3]);
+  })
+}
+
+directoryExists("../../sams-ssd/uploads/samueldlay@gmail.com");
+readDirectory("../../sams-ssd/uploads");
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "../../sams-ssd/uploads"), /* update this to not be hard-coded */
