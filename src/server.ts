@@ -9,9 +9,16 @@ import https from "https";
 import multer from "multer";
 const JSONpath = "./src/data.json";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken"
 
 const app = express();
+const router = express.Router();
 const port = 8080;
+
+const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
+console.log({ token });
+const decoded = jwt.verify(token, 'shhhhh');
+console.log(decoded)
 
 const saltRounds = 10;
 const myPlaintextPassword = "password1";
@@ -24,7 +31,7 @@ function storeUser(path: string, password: string, res: Response, newUser: User,
     try {
       if (err) throw err;
 
-      const newUserWithUUID = { ...newUser, password: hash, userID: crypto.randomUUID() };
+      const newUserWithUUID = { email: newUser.email, password: hash, userID: crypto.randomUUID() };
       users.push(newUserWithUUID);
 
       fs.writeFile(path, JSON.stringify(users, null, 2), (err) => {
@@ -36,7 +43,8 @@ function storeUser(path: string, password: string, res: Response, newUser: User,
           res.send(
             JSON.stringify({
               message: "You have been successfully added!",
-              username: newUser.email,
+              UUID: newUserWithUUID.userID,
+              user: newUser.email
             }),
           );
         }
@@ -49,37 +57,41 @@ function storeUser(path: string, password: string, res: Response, newUser: User,
   });
 }
 
-function compareHashes(password: string, hashedPassword: string) {
+function compareHashes(password: string, hashedPassword: string, res: Response, user: { password: string, email: string, userID: string }) {
   bcrypt.compare(password, hashedPassword, (err, result) => {
     try {
       if (err) throw err;
       console.log({ result });
+      // @ts-ignore
+      res.send(JSON.stringify({ result, UUID: user.userID }));
     } catch (err) {
       if (err instanceof Error) console.error(err.message);
       else console.error(JSON.stringify(err));
+      // @ts-ignore
+      res.status(401).send("bad password");
     }
   });
 }
 
-function readPassword(path: string, password: string) {
-  fs.readFile(path, "utf8", (err, data) => {
-    try {
-      if (err) throw err;
-      console.log(data);
-      const parsed = JSON.parse(data);
-      const hashedPassword = parsed.password;
-      compareHashes(password, hashedPassword);
-    } catch (err) {
-      if (err instanceof Error) console.error(err.message);
-      else console.error(JSON.stringify(err));
-    }
-  });
-}
+// function readPassword(path: string, password: string) {
+//   fs.readFile(path, "utf8", (err, data) => {
+//     try {
+//       if (err) throw err;
+//       console.log(data);
+//       const parsed = JSON.parse(data);
+//       const hashedPassword = parsed.password;
+//       compareHashes(password, hashedPassword);
+//     } catch (err) {
+//       if (err instanceof Error) console.error(err.message);
+//       else console.error(JSON.stringify(err));
+//     }
+//   });
+// }
 
 // console.log("OS:", os.networkInterfaces());
 app.use(bodyParser.json());
 app.use(cors());
-app.use(express.static("../raspberry-pi-frontend/dist"));
+app.use("/", express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
 const testSubDirectory = "3-6-2024-connect-four2.png";
 const testDirectory = `../../sams-ssd/uploads/${testSubDirectory}`;
@@ -133,10 +145,15 @@ const options = {
   cert: fs.readFileSync(path.resolve(__dirname, "example.com.crt")),
 };
 
-// app.get("/", (req, res) => {
-//   console.log(req);
-//   res.send(path.resolve("./src/dist", "index.html"));
-// });
+app.get("/test", (req, res) => {
+  console.log(req);
+  res.send("TEST");
+})
+
+app.get("/", (req, res) => {
+  console.log("HOMEPAGE");
+  res.send(path.resolve("./src/dist", "index.html"));
+});
 
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
@@ -188,8 +205,46 @@ app.post("/createAccount", (req, res) => {
   });
 });
 
-// app.post('/login', (req, res) => {
-// });
+app.post('/login', (req, res) => {
+  console.log("LOGGING IN")
+  const userLogin: { email: string, UUID: string, password: string } = req.body;
+
+  console.log({ userLogin })
+  fs.readFile(JSONpath, "utf8", (err, data) => {
+    if (err) {
+      console.error("Error reading file:", err);
+      return;
+    }
+    try {
+      const users = JSON.parse(data);
+      console.log({ users })
+      const foundUser: { password: string, email: string, userID: string } = users.find(
+        (user: {
+          email: string;
+          password: string;
+          userID: string;
+        }) => user.email === userLogin.email,
+      );
+      console.log({ foundUser })
+      if (
+        foundUser
+      ) {
+        console.log("COMPARING HASHES");
+        // @ts-ignore
+        compareHashes(userLogin.password, foundUser.password, res, foundUser);
+      }
+      else throw new Error("USER NOT FOUND");
+
+    } catch (err) {
+      if (err instanceof Error) {
+        return err.message;
+      }
+      console.error("Error parsing JSON string:", err);
+      res.send(JSON.stringify(err));
+      return err;
+    }
+  });
+});
 
 https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS Server is running at https://localhost:${port}`);
