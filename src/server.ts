@@ -1,135 +1,157 @@
+/* RESEARCH
+
+- Configure TypeScript (tsconfig.json)
+
+- Why not use fs.access?
+  https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use
+
+- Check out SQLite?
+
+- Front-end
+  ```js
+  // https://10.0.1.110:8080/somedir/somepage.html
+  fetch(new URL("/login", window.location.href), { method: "POST" });
+  ```
+
+*/
+
 import express from "express";
-import fs, { access, constants } from "fs";
-import os from "os";
+import fs, { access, lstat, constants } from "node:fs/promises";
+import os from "node:os";
 import bodyParser from "body-parser";
-import path from "path";
+import path from "node:path";
 import cors from "cors";
 import helmet from "helmet";
-import https from "https";
+import https from "node:https";
 import multer from "multer";
-const JSONpath = "./src/data.json";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
+// TODO: Environment variable?
+const JSONpath = "./src/data.json";
 const app = express();
 const router = express.Router();
 const port = 8080;
 
-const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
+const token = jwt.sign({ foo: "bar" }, "shhhhh");
 console.log({ token });
-const decoded = jwt.verify(token, 'shhhhh');
-console.log(decoded)
+const decoded = jwt.verify(token, "shhhhh");
+console.log(decoded);
 
 const saltRounds = 10;
-const myPlaintextPassword = "password1";
 
-type User = { email: string, password: string, userID: string };
+type User = {
+  email: string;
+  password: string;
+  userID: string;
+};
 
-function storeUser(path: string, password: string, res: Response, newUser: User, users: User[]) {
-  bcrypt.hash(password, saltRounds, (err, hash) => {
+async function storeUser(
+  path: string,
+  password: string,
+  res: express.Response,
+  newUser: User,
+  users: User[],
+): Promise<void> {
+  try {
+    // LOOK AT PROMISIFY IN NODE UTIL MOD
+    const hash = await bcrypt.hash(password, saltRounds);
     // Store hash in your password DB.
-    try {
-      if (err) throw err;
+    const newUserWithUUID: User = {
+      email: newUser.email,
+      password: hash,
+      userID: crypto.randomUUID(),
+    };
+    users.push(newUserWithUUID);
 
-      const newUserWithUUID = { email: newUser.email, password: hash, userID: crypto.randomUUID() };
-      users.push(newUserWithUUID);
+    // use node:fs/promises
+    await fs.writeFile(path, JSON.stringify(users, null, 2));
 
-      fs.writeFile(path, JSON.stringify(users, null, 2), (err) => {
-        if (err) {
-          console.error("Error writing file:", err);
-        } else {
-          console.log("New user added successfully!", users);
-          //@ts-ignore
-          res.send(
-            JSON.stringify({
-              message: "You have been successfully added!",
-              UUID: newUserWithUUID.userID,
-              user: newUser.email
-            }),
-          );
-        }
-      });
+    console.log("New user added successfully!", users);
+
+    res.send(
+      JSON.stringify({
+        message: "You have been successfully added!",
+        UUID: newUserWithUUID.userID,
+        user: newUser.email,
+      }),
+    );
+  } catch (cause) {
+    if (cause instanceof Error) {
+      console.error(cause);
+      res.send(cause.message);
+    } else {
+      console.error(cause);
+      res.send(JSON.stringify(cause));
     }
-    catch (err) {
-      if (err instanceof Error) console.error(err);
-      else console.error(err);
-    }
-  });
+  }
 }
 
-function compareHashes(password: string, hashedPassword: string, res: Response, user: { password: string, email: string, userID: string }) {
-  bcrypt.compare(password, hashedPassword, (err, result) => {
-    try {
-      if (err) throw err;
-      console.log({ result });
-      // @ts-ignore
+async function compareHashes(
+  password: string,
+  hashedPassword: string,
+  res: express.Response,
+  user: { password: string; email: string; userID: string },
+) {
+  try {
+    const result = await bcrypt.compare(password, hashedPassword);
+    console.log({ result });
+    if (result === true)
       res.send(JSON.stringify({ result, UUID: user.userID }));
-    } catch (err) {
-      if (err instanceof Error) console.error(err.message);
-      else console.error(JSON.stringify(err));
-      // @ts-ignore
-      res.status(401).send("bad password");
+    else res.status(401).send("bad password");
+  } catch (err) {
+    if (err instanceof Error) {
+      console.error(err.message);
+      res.status(500).send(err.message);
+    } else {
+      console.error(JSON.stringify(err));
+      res.status(500).send(JSON.stringify(err));
     }
-  });
+  }
 }
 
-// function readPassword(path: string, password: string) {
-//   fs.readFile(path, "utf8", (err, data) => {
-//     try {
-//       if (err) throw err;
-//       console.log(data);
-//       const parsed = JSON.parse(data);
-//       const hashedPassword = parsed.password;
-//       compareHashes(password, hashedPassword);
-//     } catch (err) {
-//       if (err instanceof Error) console.error(err.message);
-//       else console.error(JSON.stringify(err));
-//     }
-//   });
-// }
-
-// console.log("OS:", os.networkInterfaces());
 app.use(bodyParser.json());
 app.use(cors());
-app.use("/", express.static("../raspberry-pi-frontend/dist"));
 app.use(helmet());
-const testSubDirectory = "3-6-2024-connect-four2.png";
-const testDirectory = `../../sams-ssd/uploads/${testSubDirectory}`;
+app.use("/", express.static("../raspberry-pi-frontend/dist"));
 
-// function directoryExists(path: string) {
-//   access(path, constants.F_OK, (err) => {
-//     try {
-//       if (err) throw err;
-//       console.log("DIRECTORY EXISTS");
-//     } catch (err) {
-//       console.log(err);
-//       fs.mkdir(path, { recursive: true }, (err) => {
-//         if (err) console.log("MKDIR ERR:", err);
-//       });
-//     }
-//   })
-// }
+async function directoryExists(path: string) {
+  try {
+    await lstat(path);
+    console.log("DIRECTORY EXISTS"); // but directory does not exist though?
+  } catch (cause) {
+    console.error(JSON.stringify(cause));
+    await fs.mkdir(path, { recursive: true });
+  }
+}
 
-// function readDirectory(path: string) {
-//   const files = fs.readdir(path, { withFileTypes: true, recursive: true }, (err, data) => {
-//     if (err) console.log(err);
-//     return data;
-//   });
-
-//   return files;
-// }
-
-// directoryExists("../../sams-ssd/uploads/samueldlay@gmail.com");
-// readDirectory("../../sams-ssd/uploads");
+async function readDirectory(path: string) {
+  try {
+    const files = await fs.readdir(path, {
+      withFileTypes: true,
+      recursive: true,
+    });
+    console.log({ files });
+    return files;
+  } catch (cause) {
+    if (cause instanceof Error)
+      console.error("FN: readDirectory", cause.message);
+    else console.error("FN: readDirectory", JSON.stringify(cause));
+  }
+}
+// not working
+directoryExists("~/sams-ssd/uploads/samueldlay@gmail.com"); // changed from "../../sams-ssd/uploads"
+readDirectory("~/sams-ssd/uploads"); // changed from "../../sams-ssd/uploads"
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) =>
-    cb(null, "../../sams-ssd/uploads") /* update this to not be hard-coded */,
+  destination: (req, file, cb) => cb(null, "~/sams-ssd/uploads"), // changed from "../../sams-ssd/uploads"
   filename: (req, file, cb) => {
     const date = new Date();
     const day = date.getDate();
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
+    // TODO: Pad these? e.g. 2024-06-03 not 2024-6-3
+    // TODO: ymd not dmy for sorting purposes?
     const currentDate = `${day}-${month}-${year}`;
 
     if (file.originalname) {
@@ -141,17 +163,16 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const options = {
-  key: fs.readFileSync(path.resolve(__dirname, "example.com.key")),
-  cert: fs.readFileSync(path.resolve(__dirname, "example.com.crt")),
+  key: await fs.readFile("src/example.com.key"),
+  cert: await fs.readFile("src/example.com.crt"),
 };
 
 app.get("/test", (req, res) => {
   console.log(req);
   res.send("TEST");
-})
+});
 
 app.get("/", (req, res) => {
-  console.log("HOMEPAGE");
   res.send(path.resolve("./src/dist", "index.html"));
 });
 
@@ -164,86 +185,68 @@ app.post("/upload", upload.single("file"), (req, res) => {
 });
 
 // UPdate this logic and update frontend logic for user account creation
-app.post("/createAccount", (req, res) => {
-  const newUser: {
-    email: string;
-    password: string;
-  } = req.body;
-  fs.readFile(JSONpath, "utf8", (err, data) => {
-    if (err) {
-      console.error("Error reading file:", err);
-      return;
-    }
-    try {
-      const users = JSON.parse(data);
-      if (
-        users.find(
-          (user: {
-            email: string;
-            password: string;
-            userID: string;
-          }) => user.email === newUser.email,
-        )
-      ) {
-        res.send(
-          JSON.stringify({ message: "A user with that email already exists" }),
-        );
-        return;
-      }
-
-      // @ts-ignore
-      storeUser(JSONpath, newUser.password, res, newUser, users);
-
-    } catch (err) {
-      if (err instanceof Error) {
-        return err.message;
-      }
-      console.error("Error parsing JSON string:", err);
-      res.send(JSON.stringify(err));
-      return err;
-    }
-  });
-});
-
-app.post('/login', (req, res) => {
-  console.log("LOGGING IN")
-  const userLogin: { email: string, UUID: string, password: string } = req.body;
-
-  console.log({ userLogin })
-  fs.readFile(JSONpath, "utf8", (err, data) => {
-    if (err) {
-      console.error("Error reading file:", err);
-      return;
-    }
-    try {
-      const users = JSON.parse(data);
-      console.log({ users })
-      const foundUser: { password: string, email: string, userID: string } = users.find(
+app.post("/createAccount", async (req, res) => {
+  // TODO: Validate
+  const newUser: User = req.body;
+  try {
+    const data = await fs.readFile(JSONpath, "utf8");
+    const users: User[] = await JSON.parse(data);
+    if (
+      users.find(
         (user: {
           email: string;
           password: string;
           userID: string;
-        }) => user.email === userLogin.email,
+        }) => user.email === newUser.email,
+      )
+    ) {
+      res.send(
+        JSON.stringify({ message: "A user with that email already exists" }),
       );
-      console.log({ foundUser })
-      if (
-        foundUser
-      ) {
-        console.log("COMPARING HASHES");
-        // @ts-ignore
-        compareHashes(userLogin.password, foundUser.password, res, foundUser);
-      }
-      else throw new Error("USER NOT FOUND");
-
-    } catch (err) {
-      if (err instanceof Error) {
-        return err.message;
-      }
-      console.error("Error parsing JSON string:", err);
-      res.send(JSON.stringify(err));
-      return err;
+      return;
     }
-  });
+    storeUser(JSONpath, newUser.password, res, newUser, users);
+  } catch (cause) {
+    if (cause instanceof Error) console.error(cause);
+    else console.error(cause);
+  }
+});
+
+app.post("/login", async (req, res) => {
+  // accept header -- frontend
+  console.log("LOGGING IN");
+  const userLogin: User = req.body;
+
+  console.log({ userLogin });
+  try {
+    const data = await fs.readFile(JSONpath, "utf8");
+    const users: User[] = await JSON.parse(data);
+    console.log({ users });
+    const foundUser: User | undefined = users.find(
+      (user: {
+        email: string;
+        password: string;
+        userID: string;
+      }) => user.email === userLogin.email,
+    );
+    console.log({ foundUser });
+    if (foundUser) {
+      console.log("COMPARING HASHES");
+      await compareHashes(
+        userLogin.password,
+        foundUser.password,
+        res,
+        foundUser,
+      );
+    } else throw new Error("USER NOT FOUND");
+  } catch (err) {
+    if (err instanceof Error) {
+      return err.message;
+    }
+    console.error("Error parsing JSON string:", err);
+    res.send(JSON.stringify(err));
+    return err;
+  }
 });
 
 https.createServer(options, app).listen(port, () => {

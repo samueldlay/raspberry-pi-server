@@ -1,9 +1,10 @@
 {
   "name": "pi-server",
+  "type": "module",
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon --watch src src/server.ts",
+    "start": "nodemon --exec node --no-warnings=ExperimentalWarning --loader ts-node/esm --watch src src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
