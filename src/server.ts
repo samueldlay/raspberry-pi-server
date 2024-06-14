@@ -27,16 +27,45 @@ import multer from "multer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+async function verifyToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.headers.authorization) return res.status(401).send("No auth was sent");
+  const token = req.headers.authorization.split(" ")[1];
+
+  console.log("RUNNING IN LOGGER", token)
+
+  try {
+    jwt.verify(token, SECRET, (err, user) => {
+      if (err) throw err;
+      if (user) {
+        req.body = { ...req.body, user };
+        console.log("REQ BODY:", req.body);
+      }
+    });
+  } catch (cause) {
+    console.error("BIG ERROR:", JSON.stringify(cause));
+    return res.status(500).send(JSON.stringify(cause));
+  }
+
+  console.log("LOG HEADERS IN LOGGER", req.headers);
+  next();
+}
+
+
 // TODO: Environment variable?
 const JSONpath = "./src/data.json";
 const app = express();
 const router = express.Router();
 const port = 8080;
+const home = os.homedir();
 
-const token = jwt.sign({ foo: "bar" }, "shhhhh");
-console.log({ token });
-const decoded = jwt.verify(token, "shhhhh");
-console.log(decoded);
+app.use(bodyParser.json());
+app.use(cors());
+app.use(helmet());
+app.use("/", express.static("../raspberry-pi-frontend/dist"));
+
+console.log("HOME:", home)
+
+const SECRET = "test_secret";
 
 const saltRounds = 10;
 
@@ -54,9 +83,7 @@ async function storeUser(
   users: User[],
 ): Promise<void> {
   try {
-    // LOOK AT PROMISIFY IN NODE UTIL MOD
     const hash = await bcrypt.hash(password, saltRounds);
-    // Store hash in your password DB.
     const newUserWithUUID: User = {
       email: newUser.email,
       password: hash,
@@ -64,7 +91,6 @@ async function storeUser(
     };
     users.push(newUserWithUUID);
 
-    // use node:fs/promises
     await fs.writeFile(path, JSON.stringify(users, null, 2));
 
     console.log("New user added successfully!", users);
@@ -72,8 +98,8 @@ async function storeUser(
     res.send(
       JSON.stringify({
         message: "You have been successfully added!",
-        UUID: newUserWithUUID.userID,
-        user: newUser.email,
+        userID: newUserWithUUID.userID,
+        email: newUser.email,
       }),
     );
   } catch (cause) {
@@ -95,10 +121,7 @@ async function compareHashes(
 ) {
   try {
     const result = await bcrypt.compare(password, hashedPassword);
-    console.log({ result });
-    if (result === true)
-      res.send(JSON.stringify({ result, UUID: user.userID }));
-    else res.status(401).send("bad password");
+    return result;
   } catch (err) {
     if (err instanceof Error) {
       console.error(err.message);
@@ -109,11 +132,6 @@ async function compareHashes(
     }
   }
 }
-
-app.use(bodyParser.json());
-app.use(cors());
-app.use(helmet());
-app.use("/", express.static("../raspberry-pi-frontend/dist"));
 
 async function directoryExists(path: string) {
   try {
@@ -144,8 +162,12 @@ directoryExists("~/sams-ssd/uploads/samueldlay@gmail.com"); // changed from "../
 readDirectory("~/sams-ssd/uploads"); // changed from "../../sams-ssd/uploads"
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "~/sams-ssd/uploads"), // changed from "../../sams-ssd/uploads"
+  destination: (req, file, cb) => {
+    console.log
+    cb(null, "~/sams-ssd/uploads/samueldlay@gmail.com")
+  }, // changed from "../../sams-ssd/uploads"
   filename: (req, file, cb) => {
+    req.headers.authorization;
     const date = new Date();
     const day = date.getDate();
     const month = date.getMonth() + 1;
@@ -166,23 +188,6 @@ const options = {
   key: await fs.readFile("src/example.com.key"),
   cert: await fs.readFile("src/example.com.crt"),
 };
-
-app.get("/test", (req, res) => {
-  console.log(req);
-  res.send("TEST");
-});
-
-app.get("/", (req, res) => {
-  res.send(path.resolve("./src/dist", "index.html"));
-});
-
-app.post("/upload", upload.single("file"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send({ message: "No file uploaded." });
-  }
-  console.log("FILE_NAME: ", req.file.filename);
-  res.send({ message: "File uploaded successfully", file: req.file });
-});
 
 // UPdate this logic and update frontend logic for user account creation
 app.post("/createAccount", async (req, res) => {
@@ -211,7 +216,7 @@ app.post("/createAccount", async (req, res) => {
     else console.error(cause);
   }
 });
-
+// this logic should run on refresh or any time the page is revisited
 app.post("/login", async (req, res) => {
   // accept header -- frontend
   console.log("LOGGING IN");
@@ -232,22 +237,42 @@ app.post("/login", async (req, res) => {
     console.log({ foundUser });
     if (foundUser) {
       console.log("COMPARING HASHES");
-      await compareHashes(
+      const result = await compareHashes(
         userLogin.password,
         foundUser.password,
         res,
         foundUser,
       );
-    } else throw new Error("USER NOT FOUND");
+      if (result) {
+        const token = jwt.sign({ userLogin }, SECRET);
+        console.log({ token });
+        // foundUser.token = token;
+        // await fs.writeFile(JSONpath, JSON.stringify(users, null, 2));
+        res.send(JSON.stringify({ result, userID: userLogin.userID, email: userLogin.email, token }));
+      }
+    } else res.status(401).send("That user or password does not exist");
   } catch (err) {
     if (err instanceof Error) {
       return err.message;
     }
-    console.error("Error parsing JSON string:", err);
-    res.send(JSON.stringify(err));
+    console.error("Error", err);
+
     return err;
   }
 });
+// app.get("/", (req, res) => {
+//   res.send(path.resolve("./src/dist", "index.html"));
+// });
+
+// app.use(verifyToken);
+
+app.post("/upload", verifyToken,
+  upload.single("file"),
+  (req, res) => {
+    res.status(200).send(JSON.stringify("UPLOADED"));
+    console.log("UPLOADED");
+  }
+);
 
 https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS Server is running at https://localhost:${port}`);

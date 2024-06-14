@@ -43,6 +43,12 @@
     "email": "damitbobby@gmail.com",
     "password": "$2b$10$5NxEW6yME28hbznzt9RdFOZDR35/wzBnDIj2M1hpou5GzR0hq3yBS",
     "confirmPassword": "123456",
-    "userID": "969c1a2e-50a2-4e0f-a9a2-ae024c78d635"
+    "userID": "969c1a2e-50a2-4e0f-a9a2-ae024c78d635",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyTG9naW4iOnsiZW1haWwiOiJkYW1pdGJvYmJ5QGdtYWlsLmNvbSIsInBhc3N3b3JkIjoiMTIzNDU2In0sImlhdCI6MTcxODM0NjQ4OH0.11OuxttILIIvmrisGQHKQsK80DXP_qzJq6L1XlTH18c"
+  },
+  {
+    "email": "bruddaboi@earthlink.net",
+    "password": "$2b$10$DEEThHDp8K3GlV2vX57tSOZ6TMEJ.o/HVEWZ4qYiv5doIBz.gCPNm",
+    "userID": "faaca7f8-9083-4087-a77f-5a6a68f357f4"
   }
 ]
