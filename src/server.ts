@@ -1,11 +1,9 @@
 /* RESEARCH
 
-- Configure TypeScript (tsconfig.json)
-
 - Why not use fs.access?
   https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use
 
-- Check out SQLite?
+- Store user data using SQLite?
 
 - Front-end
   ```js
@@ -16,7 +14,7 @@
 */
 
 import express from "express";
-import fs, { access, lstat, constants } from "node:fs/promises";
+import fs, { lstat } from "node:fs/promises";
 import os from "node:os";
 import bodyParser from "body-parser";
 import path from "node:path";
@@ -27,45 +25,57 @@ import multer from "multer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+type CurrentUser = {
+  email?: string;
+  userID?: string;
+}
+
+type jwtUserPayload = {
+  foundUser: CurrentUser;
+}
+
+const home = os.homedir();
+
+function userState(currentUser: CurrentUser) {
+  const uploadPath = `${home}/sams-ssd/uploads/${currentUser.userID}`;
+  return { ...currentUser, uploadPath };
+}
+
+let state: CurrentUser & { uploadPath?: string } = {};
+
 async function verifyToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!req.headers.authorization) return res.status(401).send("No auth was sent");
   const token = req.headers.authorization.split(" ")[1];
 
-  console.log("RUNNING IN LOGGER", token)
-
   try {
     jwt.verify(token, SECRET, (err, user) => {
-      if (err) throw err;
+      if (err) {
+        throw err;
+      }
       if (user) {
-        req.body = { ...req.body, user };
-        console.log("REQ BODY:", req.body);
+        const { foundUser } = user as jwtUserPayload; // create proper data type for this
+        // currentUser.email = foundUser.email;
+        // currentUser.userID = foundUser.userID;
+        state = userState({ email: foundUser.email, userID: foundUser.userID });
       }
     });
   } catch (cause) {
-    console.error("BIG ERROR:", JSON.stringify(cause));
+    if (cause instanceof Error) console.error("BIG ERROR:", JSON.stringify(cause.message));
+    else console.error(JSON.stringify(cause));
     return res.status(500).send(JSON.stringify(cause));
   }
-
-  console.log("LOG HEADERS IN LOGGER", req.headers);
   next();
 }
-
-
-// TODO: Environment variable?
+// TODO: Environment variables?
+const SECRET = "test_secret";
 const JSONpath = "./src/data.json";
 const app = express();
-const router = express.Router();
 const port = 8080;
-const home = os.homedir();
 
 app.use(bodyParser.json());
 app.use(cors());
 app.use(helmet());
 app.use("/", express.static("../raspberry-pi-frontend/dist"));
-
-console.log("HOME:", home)
-
-const SECRET = "test_secret";
 
 const saltRounds = 10;
 
@@ -93,7 +103,7 @@ async function storeUser(
 
     await fs.writeFile(path, JSON.stringify(users, null, 2));
 
-    console.log("New user added successfully!", users);
+    await fs.mkdir(`${home}/sams-ssd/uploads/${newUserWithUUID.userID}`, { recursive: true });
 
     res.send(
       JSON.stringify({
@@ -117,7 +127,6 @@ async function compareHashes(
   password: string,
   hashedPassword: string,
   res: express.Response,
-  user: { password: string; email: string; userID: string },
 ) {
   try {
     const result = await bcrypt.compare(password, hashedPassword);
@@ -136,9 +145,8 @@ async function compareHashes(
 async function directoryExists(path: string) {
   try {
     await lstat(path);
-    console.log("DIRECTORY EXISTS"); // but directory does not exist though?
   } catch (cause) {
-    console.error(JSON.stringify(cause));
+    console.error("Diretory error:", JSON.stringify(cause));
     await fs.mkdir(path, { recursive: true });
   }
 }
@@ -149,7 +157,6 @@ async function readDirectory(path: string) {
       withFileTypes: true,
       recursive: true,
     });
-    console.log({ files });
     return files;
   } catch (cause) {
     if (cause instanceof Error)
@@ -157,14 +164,19 @@ async function readDirectory(path: string) {
     else console.error("FN: readDirectory", JSON.stringify(cause));
   }
 }
-// not working
-directoryExists("~/sams-ssd/uploads/samueldlay@gmail.com"); // changed from "../../sams-ssd/uploads"
-readDirectory("~/sams-ssd/uploads"); // changed from "../../sams-ssd/uploads"
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    console.log
-    cb(null, "~/sams-ssd/uploads/samueldlay@gmail.com")
+    // const userID = currentUser.userID; // create proper data type for this
+    if (state.userID && state.uploadPath) {
+      // directoryExists(`${home}/sams-ssd/uploads/${userID}`);
+      // readDirectory(`${home}/sams-ssd/uploads/${userID}`);
+      // cb(null, `${home}/sams-ssd/uploads/${userID}`);
+      directoryExists(state.uploadPath);
+      readDirectory(state.uploadPath);
+      cb(null, state.uploadPath);
+    }
+    else throw new Error("HANDLE THIS STORAGE ERROR");
   }, // changed from "../../sams-ssd/uploads"
   filename: (req, file, cb) => {
     req.headers.authorization;
@@ -173,8 +185,7 @@ const storage = multer.diskStorage({
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
     // TODO: Pad these? e.g. 2024-06-03 not 2024-6-3
-    // TODO: ymd not dmy for sorting purposes?
-    const currentDate = `${day}-${month}-${year}`;
+    const currentDate = `${year}-${month}-${day}`;
 
     if (file.originalname) {
       cb(null, `${currentDate}-${file.originalname}`);
@@ -189,9 +200,7 @@ const options = {
   cert: await fs.readFile("src/example.com.crt"),
 };
 
-// UPdate this logic and update frontend logic for user account creation
 app.post("/createAccount", async (req, res) => {
-  // TODO: Validate
   const newUser: User = req.body;
   try {
     const data = await fs.readFile(JSONpath, "utf8");
@@ -216,17 +225,13 @@ app.post("/createAccount", async (req, res) => {
     else console.error(cause);
   }
 });
-// this logic should run on refresh or any time the page is revisited
+
 app.post("/login", async (req, res) => {
-  // accept header -- frontend
-  console.log("LOGGING IN");
   const userLogin: User = req.body;
 
-  console.log({ userLogin });
   try {
     const data = await fs.readFile(JSONpath, "utf8");
     const users: User[] = await JSON.parse(data);
-    console.log({ users });
     const foundUser: User | undefined = users.find(
       (user: {
         email: string;
@@ -234,20 +239,14 @@ app.post("/login", async (req, res) => {
         userID: string;
       }) => user.email === userLogin.email,
     );
-    console.log({ foundUser });
     if (foundUser) {
-      console.log("COMPARING HASHES");
       const result = await compareHashes(
         userLogin.password,
         foundUser.password,
         res,
-        foundUser,
       );
       if (result) {
-        const token = jwt.sign({ userLogin }, SECRET);
-        console.log({ token });
-        // foundUser.token = token;
-        // await fs.writeFile(JSONpath, JSON.stringify(users, null, 2));
+        const token = jwt.sign({ foundUser }, SECRET);
         res.send(JSON.stringify({ result, userID: userLogin.userID, email: userLogin.email, token }));
       }
     } else res.status(401).send("That user or password does not exist");
@@ -260,17 +259,21 @@ app.post("/login", async (req, res) => {
     return err;
   }
 });
-// app.get("/", (req, res) => {
-//   res.send(path.resolve("./src/dist", "index.html"));
-// });
 
 // app.use(verifyToken);
 
 app.post("/upload", verifyToken,
   upload.single("file"),
-  (req, res) => {
-    res.status(200).send(JSON.stringify("UPLOADED"));
-    console.log("UPLOADED");
+  async (req, res) => {
+    try {
+      if (!state.uploadPath) throw new Error("Upload path undefined");
+      const files = await readDirectory(state.uploadPath);
+      res.status(200).send(JSON.stringify(files));
+    } catch (cause) {
+      if (cause instanceof Error) console.error(cause.message);
+      else console.error(JSON.stringify(cause));
+    }
+
   }
 );
 
