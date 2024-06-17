@@ -25,26 +25,41 @@ import multer from "multer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-type CurrentUser = {
-  email?: string;
-  userID?: string;
+function useState<T>(initialState: T): [() => T, (newState: T) => void] {
+  let state: T = initialState;
+  const getState = () => state;
+  const updateState = (newState: T) => {
+    state = newState;
+  }
+
+  return [getState, updateState];
 }
+
+type CurrentUser = {
+  email: string;
+  userID: string;
+  uploadPath: string;
+};
+
+const [currentUser, setCurrentUser] = useState<CurrentUser>({
+  email: "",
+  userID: "",
+  uploadPath: ""
+});
 
 type jwtUserPayload = {
   foundUser: CurrentUser;
-}
+};
 
 const home = os.homedir();
 
-function userState(currentUser: CurrentUser) {
-  const uploadPath = `${home}/sams-ssd/uploads/${currentUser.userID}`;
-  return { ...currentUser, uploadPath };
-}
-
-let state: CurrentUser & { uploadPath?: string } = {};
-
-async function verifyToken(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!req.headers.authorization) return res.status(401).send("No auth was sent");
+async function verifyToken(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  if (!req.headers.authorization)
+    return res.status(401).send("No auth was sent");
   const token = req.headers.authorization.split(" ")[1];
 
   try {
@@ -54,13 +69,12 @@ async function verifyToken(req: express.Request, res: express.Response, next: ex
       }
       if (user) {
         const { foundUser } = user as jwtUserPayload; // create proper data type for this
-        // currentUser.email = foundUser.email;
-        // currentUser.userID = foundUser.userID;
-        state = userState({ email: foundUser.email, userID: foundUser.userID });
+        setCurrentUser({ email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
       }
     });
   } catch (cause) {
-    if (cause instanceof Error) console.error("BIG ERROR:", JSON.stringify(cause.message));
+    if (cause instanceof Error)
+      console.error("BIG ERROR:", JSON.stringify(cause.message));
     else console.error(JSON.stringify(cause));
     return res.status(500).send(JSON.stringify(cause));
   }
@@ -103,7 +117,9 @@ async function storeUser(
 
     await fs.writeFile(path, JSON.stringify(users, null, 2));
 
-    await fs.mkdir(`${home}/sams-ssd/uploads/${newUserWithUUID.userID}`, { recursive: true });
+    await fs.mkdir(`${home}/sams-ssd/uploads/${newUserWithUUID.userID}`, {
+      recursive: true,
+    });
 
     res.send(
       JSON.stringify({
@@ -167,17 +183,15 @@ async function readDirectory(path: string) {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // const userID = currentUser.userID; // create proper data type for this
-    if (state.userID && state.uploadPath) {
-      // directoryExists(`${home}/sams-ssd/uploads/${userID}`);
-      // readDirectory(`${home}/sams-ssd/uploads/${userID}`);
-      // cb(null, `${home}/sams-ssd/uploads/${userID}`);
-      directoryExists(state.uploadPath);
-      readDirectory(state.uploadPath);
-      cb(null, state.uploadPath);
-    }
-    else throw new Error("HANDLE THIS STORAGE ERROR");
-  }, // changed from "../../sams-ssd/uploads"
+    if (currentUser().userID && currentUser().uploadPath) {
+      // biome-ignore lint/style/noNonNullAssertion: <explanation>
+      directoryExists(currentUser().uploadPath!);
+      // biome-ignore lint/style/noNonNullAssertion: <explanation>
+      readDirectory(currentUser().uploadPath!);
+      // biome-ignore lint/style/noNonNullAssertion: <explanation>
+      cb(null, currentUser().uploadPath!);
+    } else throw new Error("HANDLE THIS STORAGE ERROR");
+  },
   filename: (req, file, cb) => {
     req.headers.authorization;
     const date = new Date();
@@ -245,9 +259,22 @@ app.post("/login", async (req, res) => {
         foundUser.password,
         res,
       );
-      if (result) {
+      // currentUser = userState({ email: userLogin.email, userID: userLogin.userID });
+      setCurrentUser({ ...currentUser, email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
+      const user = currentUser();
+      if (result && user.uploadPath) {
         const token = jwt.sign({ foundUser }, SECRET);
-        res.send(JSON.stringify({ result, userID: userLogin.userID, email: userLogin.email, token }));
+        const files = await readDirectory(user.uploadPath);
+        const mapped = files?.filter(file => file.name !== ".DS_Store").map(file => file.name);
+        res.send(
+          JSON.stringify({
+            result,
+            userID: foundUser.userID,
+            email: foundUser.email,
+            mapped,
+            token,
+          }),
+        );
       }
     } else res.status(401).send("That user or password does not exist");
   } catch (err) {
@@ -262,20 +289,18 @@ app.post("/login", async (req, res) => {
 
 // app.use(verifyToken);
 
-app.post("/upload", verifyToken,
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      if (!state.uploadPath) throw new Error("Upload path undefined");
-      const files = await readDirectory(state.uploadPath);
-      res.status(200).send(JSON.stringify(files));
-    } catch (cause) {
-      if (cause instanceof Error) console.error(cause.message);
-      else console.error(JSON.stringify(cause));
-    }
-
+app.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
+  try {
+    const user = currentUser();
+    if (!user.uploadPath) throw new Error("Upload path undefined");
+    const files = await readDirectory(user.uploadPath);
+    const mapped = files?.filter(file => file.name !== ".DS_Store").map(file => file.name);
+    res.status(200).send(JSON.stringify(mapped));
+  } catch (cause) {
+    if (cause instanceof Error) console.error(cause.message);
+    else console.error(JSON.stringify(cause));
   }
-);
+});
 
 https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS Server is running at https://localhost:${port}`);
