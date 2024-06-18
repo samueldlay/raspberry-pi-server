@@ -209,14 +209,6 @@ const storage = multer.diskStorage({
     } else throw new Error("HANDLE THIS STORAGE ERROR");
   },
   filename: (req, file, cb) => {
-    req.headers.authorization;
-    const date = new Date();
-    const day = date.getDate();
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
-    // TODO: Pad these? e.g. 2024-06-03 not 2024-6-3
-    const currentDate = `${year}-${month}-${day}`;
-
     if (file.originalname) {
       cb(null, `${file.originalname}`);
     } else cb(null, "NOT_A_FILENAME");
@@ -230,7 +222,7 @@ const options = {
   cert: await fs.readFile("src/example.com.crt"),
 };
 
-app.post("/createAccount", async (req, res) => {
+app.post("/api/createAccount", async (req, res) => {
   const newUser: User = req.body;
   try {
     const data = await fs.readFile(JSONpath, "utf8");
@@ -256,7 +248,7 @@ app.post("/createAccount", async (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/api/login", async (req, res) => {
   const userLogin: User = req.body;
 
   console.log("USER:", userLogin);
@@ -306,7 +298,7 @@ app.post("/login", async (req, res) => {
 
 // app.use(verifyToken);
 
-app.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
+app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => {
   try {
     const user = currentUser();
     if (!user.uploadPath) throw new Error("Upload path undefined");
