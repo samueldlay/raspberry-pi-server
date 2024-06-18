@@ -1,5 +1,4 @@
 /* RESEARCH
-
 - Why not use fs.access?
   https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use
 
@@ -10,20 +9,50 @@
   // https://10.0.1.110:8080/somedir/somepage.html
   fetch(new URL("/login", window.location.href), { method: "POST" });
   ```
-
 */
 
 import express from "express";
 import fs, { lstat } from "node:fs/promises";
 import os from "node:os";
 import bodyParser from "body-parser";
-import path from "node:path";
 import cors from "cors";
 import helmet from "helmet";
 import https from "node:https";
 import multer from "multer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+
+async function loadEnv(): Promise<void> {
+  try {
+    const env = await fs.readFile("./.env", { encoding: 'utf8' });
+
+    for (const newLine of env.split("\n")) {
+      const [name, value] = newLine.split("=");
+      if (name && value) {
+        process.env[name] = value;
+      }
+    }
+
+  } catch (cause) {
+    if (cause instanceof Error) console.error(cause.message);
+    else console.error(JSON.stringify(cause));
+  }
+}
+
+await loadEnv();
+
+// TODO: Environment variables?
+const SECRET = "test_secret" as string;
+const JSONpath = "./src/data.json";
+const app = express();
+const port = 8080;
+
+app.use(bodyParser.json());
+app.use(cors());
+app.use(helmet());
+app.use("/", express.static("../raspberry-pi-frontend/dist"));
+
+const saltRounds = 10;
 
 function useState<T>(initialState: T): [() => T, (newState: T) => void] {
   let state: T = initialState;
@@ -80,18 +109,7 @@ async function verifyToken(
   }
   next();
 }
-// TODO: Environment variables?
-const SECRET = "test_secret";
-const JSONpath = "./src/data.json";
-const app = express();
-const port = 8080;
 
-app.use(bodyParser.json());
-app.use(cors());
-app.use(helmet());
-app.use("/", express.static("../raspberry-pi-frontend/dist"));
-
-const saltRounds = 10;
 
 type User = {
   email: string;
@@ -183,13 +201,11 @@ async function readDirectory(path: string) {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if (currentUser().userID && currentUser().uploadPath) {
-      // biome-ignore lint/style/noNonNullAssertion: <explanation>
-      directoryExists(currentUser().uploadPath!);
-      // biome-ignore lint/style/noNonNullAssertion: <explanation>
-      readDirectory(currentUser().uploadPath!);
-      // biome-ignore lint/style/noNonNullAssertion: <explanation>
-      cb(null, currentUser().uploadPath!);
+    const user = currentUser();
+    if (user.userID && user.uploadPath) {
+      directoryExists(user.uploadPath);
+      readDirectory(user.uploadPath);
+      cb(null, user.uploadPath);
     } else throw new Error("HANDLE THIS STORAGE ERROR");
   },
   filename: (req, file, cb) => {
@@ -202,7 +218,7 @@ const storage = multer.diskStorage({
     const currentDate = `${year}-${month}-${day}`;
 
     if (file.originalname) {
-      cb(null, `${currentDate}-${file.originalname}`);
+      cb(null, `${file.originalname}`);
     } else cb(null, "NOT_A_FILENAME");
   },
 });
@@ -243,6 +259,8 @@ app.post("/createAccount", async (req, res) => {
 app.post("/login", async (req, res) => {
   const userLogin: User = req.body;
 
+  console.log("USER:", userLogin);
+
   try {
     const data = await fs.readFile(JSONpath, "utf8");
     const users: User[] = await JSON.parse(data);
@@ -259,8 +277,7 @@ app.post("/login", async (req, res) => {
         foundUser.password,
         res,
       );
-      // currentUser = userState({ email: userLogin.email, userID: userLogin.userID });
-      setCurrentUser({ ...currentUser, email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
+      setCurrentUser({ email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
       const user = currentUser();
       if (result && user.uploadPath) {
         const token = jwt.sign({ foundUser }, SECRET);
