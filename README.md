@@ -3,3 +3,4 @@
 * Auto-generates directories and stores files of every type
 * Built to be accessed on your LAN, keeping your data private from the world
 * Implements JWT authentication for secure user account access
+* Uses bcrypt for secure password encryption
