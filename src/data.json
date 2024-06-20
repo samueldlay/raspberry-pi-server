@@ -1,40 +1,5 @@
 [
   {
-    "name": "John",
-    "email": "john@gmail.com",
-    "userID": "ec97f1d1-7678-4e15-92e1-d67f8456720c"
-  },
-  {
-    "name": "Becky",
-    "email": "Becky@gmail.com",
-    "userID": "db93d6dc-ab55-4683-87bd-260c29c997b7"
-  },
-  {
-    "name": "Sam",
-    "email": "sam@gmail.com",
-    "userID": "123456789"
-  },
-  {
-    "email": "frank@gmail.com",
-    "password": "$2b$10$Z/UCgmp67IM0oTttUCqBLOey2x//ZEsZ21rt8YoIjPZTiEnGXeYnK",
-    "userID": "4d7cd08a-d96a-4059-8fae-b3fadeee204b"
-  },
-  {
-    "email": "samboslice@gmail.com",
-    "password": "$2b$10$BSrDPGODEQYBK/P7O92RguTaQgmvqzMdNeqwBQMsq7KtYA/S6Ishm",
-    "userID": "8f05bd39-62e0-4a5f-994a-d55e606cfdc0"
-  },
-  {
-    "email": "kimboslice@gmail.com",
-    "password": "$2b$10$5meNwDgdoV/1KpaewMNO4O..1A6Czao/meNI7jckX1w/lWwy9vZVy",
-    "userID": "90557a73-4c8a-45d5-a824-0edb1bccd9c7"
-  },
-  {
-    "email": "yobro@gmail.net",
-    "password": "$2b$10$WkUmJ1qLi2h7.c7R8xEbN.c/YifLO5S5HseyA4uuHsxTzyyUdeM4G",
-    "userID": "7645f186-30b0-455b-870f-653c07ccc728"
-  },
-  {
     "email": "testuser@gmail.net",
     "password": "$2b$10$VFQsCG35uyznZnOAQVfhQefP7EjUyGw8794dHt3XIhOjlmCDwxfdy",
     "userID": "c8a49720-5780-40e0-a24b-0ab7354992e5"
@@ -45,11 +10,6 @@
     "confirmPassword": "123456",
     "userID": "969c1a2e-50a2-4e0f-a9a2-ae024c78d635",
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyTG9naW4iOnsiZW1haWwiOiJkYW1pdGJvYmJ5QGdtYWlsLmNvbSIsInBhc3N3b3JkIjoiMTIzNDU2In0sImlhdCI6MTcxODM0NjQ4OH0.11OuxttILIIvmrisGQHKQsK80DXP_qzJq6L1XlTH18c"
-  },
-  {
-    "email": "bruddaboi@earthlink.net",
-    "password": "$2b$10$DEEThHDp8K3GlV2vX57tSOZ6TMEJ.o/HVEWZ4qYiv5doIBz.gCPNm",
-    "userID": "faaca7f8-9083-4087-a77f-5a6a68f357f4"
   },
   {
     "email": "artoffolly@gmail.com",
