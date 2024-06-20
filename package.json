@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
+    "prestart": "bash cert.sh",
     "start": "nodemon --exec node --no-warnings=ExperimentalWarning --loader ts-node/esm --watch src src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

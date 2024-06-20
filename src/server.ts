@@ -46,6 +46,11 @@ const JSONpath = "./src/data.json";
 const app = express();
 const port = process.env.PORT;
 
+const options = {
+  key: await fs.readFile("src/localhost.key"),
+  cert: await fs.readFile("src/localhost.crt"),
+};
+
 app.use(bodyParser.json());
 app.use(cors());
 app.use(helmet());
@@ -89,7 +94,6 @@ async function verifyToken(
   res: express.Response,
   next: express.NextFunction,
 ) {
-  console.log("IN VERIFY FUNCTION")
   if (!req.headers.authorization)
     return res.status(401).send("No auth was sent");
   const token = req.headers.authorization.split(" ")[1];
@@ -232,11 +236,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-
-const options = {
-  key: await fs.readFile("src/example.com.key"),
-  cert: await fs.readFile("src/example.com.crt"),
-};
 
 app.post("/api/createAccount", async (req, res) => {
   const newUser: User = req.body;
