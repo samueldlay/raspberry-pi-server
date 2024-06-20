@@ -60,5 +60,15 @@
     "email": "beckyryz@gmail.com",
     "password": "$2b$10$eHs6S/1mUFsCBihPllzObOW/2wvpJRTDTB6PyDCXhGfBvYMgSYmxi",
     "userID": "fcbb0947-a058-43b5-b976-1b6ae81e01c7"
+  },
+  {
+    "email": "testuser1@gmail.com",
+    "password": "$2b$10$0GOU3UmSbvxhwGFHEAEgCuwYuqTdeSXY3T6hPWPRH5WaSyqsFlq/2",
+    "userID": "c9abe0be-913c-49dc-966f-c48deeb9aecf"
+  },
+  {
+    "email": "testuser2@gmail.com",
+    "password": "$2b$10$Eih53YgXJIGVbSJoTCfq4O/Bcy9NzYsWYoevhE2Av8Xk9BsO7YfqS",
+    "userID": "a7645e71-8cb9-4d1c-b86c-bffd4cae81db"
   }
 ]

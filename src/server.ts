@@ -24,7 +24,7 @@ import jwt from "jsonwebtoken";
 
 async function loadEnv(): Promise<void> {
   try {
-    const env = await fs.readFile("./.env", { encoding: 'utf8' });
+    const env = await fs.readFile("./.env", { encoding: "utf8" });
 
     for (const newLine of env.split("\n")) {
       const [name, value] = newLine.split("=");
@@ -32,7 +32,6 @@ async function loadEnv(): Promise<void> {
         process.env[name] = value;
       }
     }
-
   } catch (cause) {
     if (cause instanceof Error) console.error(cause.message);
     else console.error(JSON.stringify(cause));
@@ -42,10 +41,10 @@ async function loadEnv(): Promise<void> {
 await loadEnv();
 
 // TODO: Environment variables?
-const SECRET = "test_secret" as string;
+const SECRET = process.env.SECRET as string;
 const JSONpath = "./src/data.json";
 const app = express();
-const port = 8080;
+const port = process.env.PORT;
 
 app.use(bodyParser.json());
 app.use(cors());
@@ -59,7 +58,7 @@ function useState<T>(initialState: T): [() => T, (newState: T) => void] {
   const getState = () => state;
   const updateState = (newState: T) => {
     state = newState;
-  }
+  };
 
   return [getState, updateState];
 }
@@ -70,27 +69,30 @@ type CurrentUser = {
   uploadPath: string;
 };
 
-const [currentUser, setCurrentUser] = useState<CurrentUser>({
-  email: "",
-  userID: "",
-  uploadPath: ""
-});
-
 type jwtUserPayload = {
   foundUser: CurrentUser;
 };
 
 const home = os.homedir();
+const userCreatedPath = "sams-ssd";
+
+function generateUploadPath(
+  homePath: string,
+  userCreatedPath: string,
+  userID: string,
+) {
+  return `${homePath}/${userCreatedPath}/uploads/${userID}`;
+}
 
 async function verifyToken(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction,
 ) {
+  console.log("IN VERIFY FUNCTION")
   if (!req.headers.authorization)
     return res.status(401).send("No auth was sent");
   const token = req.headers.authorization.split(" ")[1];
-
   try {
     jwt.verify(token, SECRET, (err, user) => {
       if (err) {
@@ -98,7 +100,16 @@ async function verifyToken(
       }
       if (user) {
         const { foundUser } = user as jwtUserPayload; // create proper data type for this
-        setCurrentUser({ email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
+        res.locals.user = {
+          email: foundUser.email,
+          userID: foundUser.userID,
+          uploadPath: generateUploadPath(
+            home,
+            userCreatedPath,
+            foundUser.userID,
+          ),
+        }
+
       }
     });
   } catch (cause) {
@@ -109,7 +120,6 @@ async function verifyToken(
   }
   next();
 }
-
 
 type User = {
   email: string;
@@ -135,7 +145,13 @@ async function storeUser(
 
     await fs.writeFile(path, JSON.stringify(users, null, 2));
 
-    await fs.mkdir(`${home}/sams-ssd/uploads/${newUserWithUUID.userID}`, {
+    const uploadPath = generateUploadPath(
+      home,
+      userCreatedPath,
+      newUserWithUUID.userID,
+    );
+
+    await fs.mkdir(uploadPath, {
       recursive: true,
     });
 
@@ -194,18 +210,18 @@ async function readDirectory(path: string) {
     return files;
   } catch (cause) {
     if (cause instanceof Error)
-      console.error("FN: readDirectory", cause.message);
-    else console.error("FN: readDirectory", JSON.stringify(cause));
+      console.error(cause.message);
+    else console.error(JSON.stringify(cause));
   }
 }
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const user = currentUser();
-    if (user.userID && user.uploadPath) {
-      directoryExists(user.uploadPath);
-      readDirectory(user.uploadPath);
-      cb(null, user.uploadPath);
+    const currUser: CurrentUser = req.res?.locals.user
+    if (currUser.userID && currUser.uploadPath) {
+      directoryExists(currUser.uploadPath);
+      readDirectory(currUser.uploadPath);
+      cb(null, currUser.uploadPath);
     } else throw new Error("HANDLE THIS STORAGE ERROR");
   },
   filename: (req, file, cb) => {
@@ -251,8 +267,6 @@ app.post("/api/createAccount", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   const userLogin: User = req.body;
 
-  console.log("USER:", userLogin);
-
   try {
     const data = await fs.readFile(JSONpath, "utf8");
     const users: User[] = await JSON.parse(data);
@@ -269,12 +283,17 @@ app.post("/api/login", async (req, res) => {
         foundUser.password,
         res,
       );
-      setCurrentUser({ email: foundUser.email, userID: foundUser.userID, uploadPath: `${home}/sams-ssd/uploads/${foundUser.userID}` })
-      const user = currentUser();
-      if (result && user.uploadPath) {
+      const uploadPath = generateUploadPath(
+        home,
+        userCreatedPath,
+        foundUser.userID,
+      );
+      if (result) {
         const token = jwt.sign({ foundUser }, SECRET);
-        const files = await readDirectory(user.uploadPath);
-        const mapped = files?.filter(file => file.name !== ".DS_Store").map(file => file.name);
+        const files = await readDirectory(uploadPath);
+        const mapped = files
+          ?.filter((file) => file.name !== ".DS_Store")
+          .map((file) => file.name);
         res.send(
           JSON.stringify({
             result,
@@ -296,20 +315,43 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// app.use(verifyToken);
-
-app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => {
+app.post("/api/files", verifyToken, async (req, res) => {
   try {
-    const user = currentUser();
-    if (!user.uploadPath) throw new Error("Upload path undefined");
-    const files = await readDirectory(user.uploadPath);
-    const mapped = files?.filter(file => file.name !== ".DS_Store").map(file => file.name);
-    res.status(200).send(JSON.stringify(mapped));
+    const user: User = req.body;
+    if (!user) throw new Error("Upload path undefined");
+    const uploadPath = generateUploadPath(home, userCreatedPath, user.userID);
+    const unfilteredFiles = await readDirectory(uploadPath);
+    const files = unfilteredFiles
+      ?.filter((file) => file.name !== ".DS_Store")
+      .map((file) => file.name);
+    res.send(files);
   } catch (cause) {
     if (cause instanceof Error) console.error(cause.message);
     else console.error(JSON.stringify(cause));
   }
 });
+
+// app.use(verifyToken);
+
+app.post(
+  "/api/upload",
+  verifyToken,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const user: CurrentUser = res.locals.user;
+      if (!Object.keys(user).length) throw new Error("Upload path undefined");
+      const files = await readDirectory(user.uploadPath);
+      const mapped = files
+        ?.filter((file) => file.name !== ".DS_Store")
+        .map((file) => file.name);
+      res.status(200).send(mapped);
+    } catch (cause) {
+      if (cause instanceof Error) console.error(cause.message);
+      else console.error(JSON.stringify(cause));
+    }
+  },
+);
 
 https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS Server is running at https://localhost:${port}`);
