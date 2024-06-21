@@ -219,6 +219,16 @@ async function readDirectory(path: string) {
   }
 }
 
+async function downloadFile(res: express.Response, path: string) {
+  try {
+    directoryExists(path);
+    res.download(path);
+  } catch (cause) {
+    if (cause instanceof Error) console.error(cause.message);
+    else console.error(JSON.stringify(cause));
+  }
+}
+
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     const currUser: CurrentUser = req.res?.locals.user
@@ -352,6 +362,15 @@ app.post(
     }
   },
 );
+
+app.get("/api/download/:userID/:fileName", verifyToken, async (req, res) => {
+  const userFile = req.params;
+  console.log(userFile);
+  const filePath = `${userFile.userID}/${userFile.fileName}`
+  const path = generateUploadPath(home, userCreatedPath, filePath);
+  await downloadFile(res, path);
+  // res.status(200).send({ params: req.params });
+});
 
 https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS Server is running at https://localhost:${port}`);
