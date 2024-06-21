@@ -220,11 +220,11 @@ async function readDirectory(path: string) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: async (req, file, cb) => {
     const currUser: CurrentUser = req.res?.locals.user
     if (currUser.userID && currUser.uploadPath) {
-      directoryExists(currUser.uploadPath);
-      readDirectory(currUser.uploadPath);
+      await directoryExists(currUser.uploadPath);
+      await readDirectory(currUser.uploadPath);
       cb(null, currUser.uploadPath);
     } else throw new Error("HANDLE THIS STORAGE ERROR");
   },
@@ -340,6 +340,7 @@ app.post(
     try {
       const user: CurrentUser = res.locals.user;
       if (!Object.keys(user).length) throw new Error("Upload path undefined");
+      await directoryExists(user.uploadPath);
       const files = await readDirectory(user.uploadPath);
       const mapped = files
         ?.filter((file) => file.name !== ".DS_Store")
