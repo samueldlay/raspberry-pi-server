@@ -28,5 +28,10 @@
     "email": "testuser2@gmail.com",
     "password": "$2b$10$Eih53YgXJIGVbSJoTCfq4O/Bcy9NzYsWYoevhE2Av8Xk9BsO7YfqS",
     "userID": "a7645e71-8cb9-4d1c-b86c-bffd4cae81db"
+  },
+  {
+    "email": "testuser5@gmail.com",
+    "password": "$2b$10$u7a31QYGhdYkdd31zrFfTuGd6s/yzMk9yQW7Iz9vSSUXnQqTBiYvu",
+    "userID": "628c311b-844e-44ca-bb80-89ca010a4b6d"
   }
 ]
