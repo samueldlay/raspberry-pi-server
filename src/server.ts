@@ -1,18 +1,10 @@
-/* RESEARCH
-- Why not use fs.access?
-  https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use
-
+/* 
+RESEARCH
 - Store user data using SQLite?
-
-- Front-end
-  ```js
-  // https://10.0.1.110:8080/somedir/somepage.html
-  fetch(new URL("/login", window.location.href), { method: "POST" });
-  ```
 */
 
 import express from "express";
-import fs, { lstat } from "node:fs/promises";
+import fs, { lstat, rm } from "node:fs/promises";
 import os from "node:os";
 import bodyParser from "body-parser";
 import cors from "cors";
@@ -40,7 +32,6 @@ async function loadEnv(): Promise<void> {
 
 await loadEnv();
 
-// TODO: Environment variables?
 const SECRET = process.env.SECRET as string;
 const JSONpath = "./src/data.json";
 const app = express();
@@ -112,8 +103,7 @@ async function verifyToken(
             userCreatedPath,
             foundUser.userID,
           ),
-        }
-
+        };
       }
     });
   } catch (cause) {
@@ -213,8 +203,7 @@ async function readDirectory(path: string) {
     });
     return files;
   } catch (cause) {
-    if (cause instanceof Error)
-      console.error(cause.message);
+    if (cause instanceof Error) console.error(cause.message);
     else console.error(JSON.stringify(cause));
   }
 }
@@ -231,7 +220,7 @@ async function downloadFile(res: express.Response, path: string) {
 
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const currUser: CurrentUser = req.res?.locals.user
+    const currUser: CurrentUser = req.res?.locals.user;
     if (currUser.userID && currUser.uploadPath) {
       await directoryExists(currUser.uploadPath);
       cb(null, currUser.uploadPath);
@@ -340,8 +329,6 @@ app.post("/api/files", verifyToken, async (req, res) => {
   }
 });
 
-// app.use(verifyToken);
-
 app.post(
   "/api/upload",
   verifyToken,
@@ -365,11 +352,31 @@ app.post(
 
 app.get("/api/download/:userID/:fileName", verifyToken, async (req, res) => {
   const userFile = req.params;
-  console.log(userFile);
-  const filePath = `${userFile.userID}/${userFile.fileName}`
+  const filePath = `${userFile.userID}/${userFile.fileName}`;
   const path = generateUploadPath(home, userCreatedPath, filePath);
   await downloadFile(res, path);
-  // res.status(200).send({ params: req.params });
+});
+
+app.get("/api/remove/:userID/:fileName", verifyToken, async (req, res) => {
+  const userFile = req.params;
+  const filePath = `${userFile.userID}/${userFile.fileName}`;
+  const path = generateUploadPath(home, userCreatedPath, filePath);
+  try {
+    await rm(path, { recursive: true });
+    const directory = generateUploadPath(
+      home,
+      userCreatedPath,
+      userFile.userID,
+    );
+    const dirFiles = await readDirectory(directory);
+    const files = dirFiles
+      ?.filter((file) => file.name !== ".DS_Store")
+      .map((file) => file.name);
+    res.status(200).send(files);
+  } catch (cause) {
+    if (cause instanceof Error) console.error(cause.message);
+    else console.error(JSON.stringify(cause));
+  }
 });
 
 https.createServer(options, app).listen(port, () => {
